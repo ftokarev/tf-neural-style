@@ -37,7 +37,7 @@ class NeuralStyle:
     )
 
 
-    def __init__(self, content, style, output,
+    def __init__(self, content_image, style_image, output_image,
             style_layers=('conv1_1','conv2_1','conv3_1','conv4_1','conv5_1'),
             content_layers=('conv4_2',),
             style_weight=1e2,
@@ -52,16 +52,19 @@ class NeuralStyle:
         self._content_weight = content_weight
         self._tv_weight = tv_weight
         self._vgg_model_file = vgg_model_file
-        self._content, self._style, self._output = content, style, output
+        self._content_image = content_image
+        self._style_image = style_image
+        self._output_image = output_image
         self._maxsize = maxsize
         self._maxiter = maxiter
         self._nodes = {}
 
 
     def run(self):
-        content = self._load_image(self._content)
-        style = self._load_image(self._style)
-        image = tf.Variable(style, dtype=tf.float32, validate_shape=False, name='image')
+        content = self._load_image(self._content_image)
+        style = self._load_image(self._style_image)
+        image = tf.Variable(style,
+            dtype=tf.float32, validate_shape=False, name='image')
         self._build_vgg19(image)
         self._add_gramians()
         with tf.Session() as sess:
@@ -73,7 +76,8 @@ class NeuralStyle:
                 image.set_shape(content.shape) # tv loss expects explicit shape
                 if self._tv_weight:
                     tv_loss = tf.image.total_variation(image[0])
-                    tv_loss_weighted = tf.multiply(tv_loss, self._tv_weight, name='tv_loss')
+                    tv_loss_weighted = tf.multiply(tv_loss, self._tv_weight,
+                        name='tv_loss')
                     losses += tv_loss_weighted
                 loss = tf.foldl(add, losses, name='loss')
             sess.run(tf.assign(image, content, validate_shape=False))
@@ -81,7 +85,7 @@ class NeuralStyle:
                 options={'maxiter': self._maxiter, 'disp': 1},
                 method='L-BFGS-B')
             opt.minimize(sess)
-            self._save_image(self._output, sess.run(image))
+            self._save_image(self._output_image, sess.run(image))
 
 
     def _build_vgg19(self, prev):
@@ -184,12 +188,7 @@ class NeuralStyle:
         imsave(filename, img.astype(np.uint8))
 
 
-    def _log(self, *args):
-        print(*args)
-
-
 class KerasVGG19:
-
 
     def __init__(self, filename):
         self._f = h5py.File(filename, 'r')
@@ -211,5 +210,5 @@ class KerasVGG19:
 
 if __name__ == '__main__':
     neural_style = NeuralStyle('content.jpg', 'style.jpg', 'output.jpg',
-        maxsize=300, maxiter=100)
+        maxsize=700, maxiter=500)
     neural_style.run()
