@@ -42,6 +42,7 @@ class NeuralStyle:
             content_layers=('conv4_2',),
             style_weight=1e2,
             content_weight=5e0,
+            tv_weight=1e-3,
             vgg_model_file='model/vgg19_weights.h5',
             maxsize=500,
             maxiter=500):
@@ -49,6 +50,7 @@ class NeuralStyle:
         self._content_layers = content_layers
         self._style_weight = style_weight
         self._content_weight = content_weight
+        self._tv_weight = tv_weight
         self._vgg_model_file = vgg_model_file
         self._content, self._style, self._output = content, style, output
         self._maxsize = maxsize
@@ -67,8 +69,13 @@ class NeuralStyle:
             with tf.name_scope('losses'):
                 style_losses = self._setup_style_losses(sess, image, style)
                 content_losses = self._setup_content_losses(sess, image, content)
-                loss = tf.foldl(add, content_losses+style_losses, name='loss')
-            image.set_shape(content.shape)
+                losses = content_losses+style_losses
+                image.set_shape(content.shape) # tv loss expects explicit shape
+                if self._tv_weight:
+                    tv_loss = tf.image.total_variation(image[0])
+                    tv_loss_weighted = tf.multiply(tv_loss, self._tv_weight, name='tv_loss')
+                    losses += tv_loss_weighted
+                loss = tf.foldl(add, losses, name='loss')
             sess.run(tf.assign(image, content, validate_shape=False))
             opt = ScipyOptimizerInterface(loss,
                 options={'maxiter': self._maxiter, 'disp': 1},
