@@ -43,6 +43,7 @@ class NeuralStyle:
             style_weight=1e2,
             content_weight=5e0,
             tv_weight=1e-3,
+            init='random',
             vgg_model_file='model/vgg19_weights.h5',
             maxsize=500,
             maxiter=500):
@@ -55,6 +56,7 @@ class NeuralStyle:
         self._content_image = content_image
         self._style_image = style_image
         self._output_image = output_image
+        self._init = init
         self._maxsize = maxsize
         self._maxiter = maxiter
         self._nodes = {}
@@ -80,7 +82,13 @@ class NeuralStyle:
                         name='tv_loss')
                     losses += tv_loss_weighted
                 loss = tf.foldl(add, losses, name='loss')
-            sess.run(tf.assign(image, content, validate_shape=False))
+            if self._init == 'image':
+                sess.run(tf.assign(image, content, validate_shape=False))
+            elif self._init == 'random':
+                noise = tf.random_normal(content.shape, stddev=0.001)
+                sess.run(tf.assign(image, noise, validate_shape=False))
+            else:
+                raise ValueError("Unknown init method: " + self._init)
             opt = ScipyOptimizerInterface(loss,
                 options={'maxiter': self._maxiter, 'disp': 1},
                 method='L-BFGS-B')
