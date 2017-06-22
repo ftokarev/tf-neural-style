@@ -37,18 +37,21 @@ class NeuralStyle:
     )
 
 
-    def __init__(self, content_image, style_image, output_image,
-            style_layers=('conv1_1','conv2_1','conv3_1','conv4_1','conv5_1'),
-            content_layers=('conv4_2',),
-            style_weight=1e2,
+    def __init__(self, *,
+            content_image='content.jpg',
+            content_layers='conv4_2',
             content_weight=5e0,
-            tv_weight=1e-3,
-            init='random',
-            vgg_model_file='model/vgg19_weights.h5',
+            init: 'random|image' = 'random',
+            maxiter=500,
             maxsize=500,
-            maxiter=500):
-        self._style_layers = style_layers
-        self._content_layers = content_layers
+            output_image='output.jpg',
+            style_image='style.jpg',
+            style_layers='conv1_1,conv2_1,conv3_1,conv4_1,conv5_1',
+            style_weight=1e2,
+            tv_weight=1e-3,
+            vgg_model_file='model/vgg19_weights.h5'):
+        self._style_layers = style_layers.split(',')
+        self._content_layers = content_layers.split(',')
         self._style_weight = style_weight
         self._content_weight = content_weight
         self._tv_weight = tv_weight
@@ -217,6 +220,28 @@ class KerasVGG19:
 
 
 if __name__ == '__main__':
-    neural_style = NeuralStyle('content.jpg', 'style.jpg', 'output.jpg',
-        maxsize=700, maxiter=500)
-    neural_style.run()
+    import inspect
+    import sys
+
+    sig = inspect.signature(NeuralStyle.__init__)
+    params = [(name, param.default, param.annotation)
+                for name, param in sig.parameters.items()
+                if param.kind == inspect.Parameter.KEYWORD_ONLY]
+
+    flags = {
+        bool: tf.flags.DEFINE_boolean,
+        float: tf.flags.DEFINE_float,
+        int: tf.flags.DEFINE_integer,
+        str: tf.flags.DEFINE_string
+    }
+    for name, default, annotation in params:
+        docstring = '[%(default)s]'
+        if annotation != inspect.Parameter.empty:
+            docstring = annotation + ' ' + docstring
+        flags[type(default)](name, default, docstring)
+
+    def launcher(args):
+        values = {name: getattr(tf.flags.FLAGS, name) for name, _, _ in params}
+        NeuralStyle(**values).run()
+
+    tf.app.run(launcher, sys.argv)
