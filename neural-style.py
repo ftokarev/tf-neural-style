@@ -42,26 +42,31 @@ class NeuralStyle:
             content_image='content.jpg',
             content_layers='conv4_2',
             content_weight=5e0,
+            image_size=500,
             init: 'random|image' = 'random',
-            maxiter=500,
-            maxsize=500,
+            num_iterations=500,
             output_image='output.jpg',
+            print_iter=50,
+            save_iter=100,
             style_image='style.jpg',
             style_layers='conv1_1,conv2_1,conv3_1,conv4_1,conv5_1',
             style_weight=1e2,
             tv_weight=1e-3):
-        self._style_layers = style_layers.split(',')
-        self._content_layers = content_layers.split(',')
-        self._style_weight = style_weight
-        self._content_weight = content_weight
-        self._tv_weight = tv_weight
         self._content_image = content_image
-        self._style_image = style_image
-        self._output_image = output_image
+        self._content_layers = content_layers.split(',')
+        self._content_weight = content_weight
         self._init = init
-        self._maxsize = maxsize
-        self._maxiter = maxiter
+        self._num_iterations = num_iterations
+        self._image_size = image_size
+        self._output_image = output_image
+        self._print_iter = print_iter
+        self._save_iter = save_iter
+        self._style_image = style_image
+        self._style_layers = style_layers.split(',')
+        self._style_weight = style_weight
+        self._tv_weight = tv_weight
         self._nodes = {}
+        self._step_counter = 0
 
 
     def run(self):
@@ -69,6 +74,7 @@ class NeuralStyle:
         style = self._load_image(self._style_image)
         image = tf.Variable(style,
             dtype=tf.float32, validate_shape=False, name='image')
+        self._output_shape = content.shape
         self._build_vgg19(image)
         self._add_gramians()
         with tf.Session() as sess:
@@ -91,10 +97,10 @@ class NeuralStyle:
                 sess.run(tf.assign(image, noise, validate_shape=False))
             else:
                 raise ValueError("Unknown init method: " + self._init)
-            opt = ScipyOptimizerInterface(loss,
-                options={'maxiter': self._maxiter, 'disp': 1},
-                method='L-BFGS-B')
-            opt.minimize(sess)
+            opt = ScipyOptimizerInterface(loss, options={
+                    'maxiter': self._num_iterations,
+                    'disp': self._print_iter}, method='L-BFGS-B')
+            opt.minimize(sess, step_callback=self._step_callback)
             self._save_image(self._output_image, sess.run(image))
 
 
@@ -178,9 +184,19 @@ class NeuralStyle:
         return output
 
 
+    def _step_callback(self, variables_vector):
+        self._step_counter += 1
+        if (self._step_counter % self._save_iter == 0 and
+                self._step_counter != self._num_iterations):
+            root, ext = os.path.splitext(self._output_image)
+            filename = '%s_%04d%s' % (root, self._step_counter, ext)
+            image = np.copy(variables_vector).reshape(self._output_shape)
+            self._save_image(filename, image)
+
+
     def _load_image(self, filename):
         img = imread(filename, mode='RGB')
-        (h, w, _), m = img.shape, self._maxsize
+        (h, w, _), m = img.shape, self._image_size
         if max(img.shape) > m:
             h, w = (m, round(m*w/h)) if h > w else (round(m*h/w), m)
             img = imresize(img, (h, w))
