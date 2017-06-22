@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from operator import add
+import os
 
 from scipy.misc import imread, imresize, imsave
 from tensorflow.contrib.opt import ScipyOptimizerInterface
@@ -48,14 +49,12 @@ class NeuralStyle:
             style_image='style.jpg',
             style_layers='conv1_1,conv2_1,conv3_1,conv4_1,conv5_1',
             style_weight=1e2,
-            tv_weight=1e-3,
-            vgg_model_file='model/vgg19_weights.h5'):
+            tv_weight=1e-3):
         self._style_layers = style_layers.split(',')
         self._content_layers = content_layers.split(',')
         self._style_weight = style_weight
         self._content_weight = content_weight
         self._tv_weight = tv_weight
-        self._vgg_model_file = vgg_model_file
         self._content_image = content_image
         self._style_image = style_image
         self._output_image = output_image
@@ -100,7 +99,7 @@ class NeuralStyle:
 
 
     def _build_vgg19(self, prev):
-        weights = KerasVGG19(self._vgg_model_file)
+        weights = KerasVGG19Weights('model/vgg19_weights.h5')
         vgg_trunc = NeuralStyle.VGG19_NO_FC[0:self._vgg_last_useful_layer()+1]
         with tf.name_scope('vgg19_truncated'):
             for layer_type, name, shape in vgg_trunc:
@@ -199,9 +198,14 @@ class NeuralStyle:
         imsave(filename, img.astype(np.uint8))
 
 
-class KerasVGG19:
+class KerasVGG19Weights:
+
 
     def __init__(self, filename):
+        filename = os.path.realpath(
+            os.path.join(os.getcwd(),
+            os.path.dirname(__file__),
+            filename))
         self._f = h5py.File(filename, 'r')
 
 
