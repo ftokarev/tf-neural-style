@@ -245,6 +245,10 @@ if __name__ == '__main__':
         flags[type(default)](name, default, docstring)
 
     def launcher(args):
+        if len(args) > 1:
+            print("Unknown arguments provided:", " ".join(args[1:]))
+            print("Launch with -h flag for help")
+            exit(1)
         values = {name: getattr(tf.flags.FLAGS, name) for name, _, _ in params}
         NeuralStyle(**values).run()
 
